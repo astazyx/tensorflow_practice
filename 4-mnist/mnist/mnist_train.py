@@ -12,7 +12,7 @@ TRAINING_STEPS = 30000
 MOVING_AVERAGE_DECAY = 0.99
 
 
-MODEL_SAVE_PATH = "/tmp/to/model"
+MODEL_SAVE_PATH = "/tmp/data/model"
 MODEL_NAME = "model.ckpt"
 
 def train(mnist):
@@ -34,10 +34,10 @@ def train(mnist):
     learning_rate = tf.train.exponential_decay(
         LEARNING_RATE_BASE,
         global_step,
-        mnist_inference.train.num_examples / BATCH_SIZE,
+        mnist.train.num_examples / BATCH_SIZE,
         LEARNING_RATE_DECAY
     )
-    train_step = tf.train.GradientDescentOptimizer(learning_rate.minimize(loss, global_step=global_step))
+    train_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, global_step=global_step)
     with tf.control_dependencies([train_step, variable_average_op]):
         train_op = tf.no_op(name='train')
 
@@ -46,14 +46,14 @@ def train(mnist):
         tf.global_variables_initializer().run()
         for i in range(TRAINING_STEPS):
             xs, ys = mnist.train.next_batch(BATCH_SIZE)
-            _, loss_value, step = see.run([train_op, loss, global_step], feed_dict={x: xs, y_: ys})
+            _, loss_value, step = sess.run([train_op, loss, global_step], feed_dict={x: xs, y_: ys})
 
-        if i % 1000 == 0:
-            print("After  %d training step(s), loss on training batch is %g. " % (step, loss_value))
-            saver.save(sess, os.path.join(MODEL_SAVE_PATH, MODEL_NAME), global_step=global_step)
+            if i % 1000 == 0:
+                print("After  %d training step(s), loss on training batch is %g. " % (step, loss_value))
+                saver.save(sess, os.path.join(MODEL_SAVE_PATH, MODEL_NAME), global_step=global_step)
 
 def main(argv=None):
-    mnist = input_data.read_data_sets("/tmp/to/model", one_hot=True)
+    mnist = input_data.read_data_sets("/tmp/data/", one_hot=True)
     train(mnist)
 
 if __name__ == '__main__':
