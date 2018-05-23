@@ -38,8 +38,8 @@ def evaluate(mnist):
 
 
 def main(argv=None):
-    mnist = input_data.read_data_sets("/tmp/to/model", one_hot=True)
-    rain(mnist)
+    mnist = input_data.read_data_sets("/tmp/data", one_hot=True)
+    evaluate(mnist)
 
 if __name__ == '__main__':
     tf.app.run()
