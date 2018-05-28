@@ -63,31 +63,61 @@ def train(mnist):
     #计算在当前参数下的神经网络前向传播结果。这里是用于计算滑动平均的类为None，所以参数不使用参数的滑动平均值
     y = inference(x, None, weights1, biases1, weights2, biases2)
 
-    #定义存储训练轮数的变量
+    #定义存储训练轮数的变量.这个变量不需要计算滑动平均值，所以这里制定为不可训练的变量trainable=False
+    #在tf训练神经网络时，一般将代表训练轮数的变量指定为不可训练的参数。
     global_step = tf.Variable(0, trainable=False)
-    variable_averages = tf.train.ExponentialMovingAverage(MOVING_AVERAGE_DECAY, global_step)
 
+    #给定滑动平均衰减率和训练轮数的变量，初始化滑动平均类。
+    #给定训练轮数的变量可以加速训练早期变量的更新速度。
+    variable_averages = tf.train.ExponentialMovingAverage(MOVING_AVERAGE_DECAY, global_step)
+    #在所有代表神经网络参数的变量上滑动平均。
+    #其他辅助变量就不需要
+    #tf.trainable_variables()返回的就是图上的集合
+    #GraphKeys.TRAINABLE_VARIABLES中元素是所有没有指定trainable=False的参数
     variable_averages_op = variable_averages.apply(tf.trainable_variables())
+    #计算使用量滑动平均之后的前向传播结果。
+    #滑动平均不会改变变量本身的取值，而是维护一个影子变量来记录其滑动平均值。
+    #当需要使用这个滑动平均值，需要明确调用average函数
     average_y = inference(x, variable_averages, weights1, biases1, weights2, biases2)
+    #计算交叉熵作为刻画预测值和真实值之间差距的损失函数。
+    #这里使用sparse_softmax_cross_entropy_with_logits函数计算交叉熵。
+    #当分类问题只有一个正确答案，可以使用这个函数来加速交叉熵的计算。
+    #mnist问题只包含0-9中一个数字，所以可以使用这个函数计算交叉熵。
+    #这个函数第一个参数是神经网络不包括softmax层的前向传播结果。第二个是训练数据的正确答案。
+    #因为标准答案是一个长度10的一维数组。而该函数需要提供的是一个正确答案的数字，
+    #所以需要使用tf.arg_max函数来得到正确答案对应的类别编号。
     cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=y, labels=tf.arg_max(y_, 1))
+    #计算当前batch中所有样例的交叉熵平均值。
     cross_entropy_mean = tf.reduce_mean(cross_entropy)
 
+    #计算l2正则化损失函数
     regularizer = tf.contrib.layers.l2_regularizer(REGULARIZATION_RATE)
+    #计算模型的正则化损失。一般只计算神经网络边上权重的正则化损失，而不使用偏执项
     regularization = regularizer(weights1) + regularizer(weights2)
+    #总损失等于交叉熵损失和正则化损失的和
     loss = cross_entropy_mean + regularization
 
     learning_rate = tf.train.exponential_decay(
-        LEARNING_RATE_BASE,
-        global_step,
-        mnist.train.num_examples / BATCH_SIZE,
-        LEARNING_RATE_DECAY
+        LEARNING_RATE_BASE,                     #基础的学习率，随着迭代的进行，更新变量时使用的
+        global_step,                            #当前迭代轮数
+        mnist.train.num_examples / BATCH_SIZE,  #过完所有的训练数据需要迭代次数
+        LEARNING_RATE_DECAY                     #学习率摔衰减速度
     )
 
+    #使用tf.train.GradientDescentOptimizer优化损失函数。
+    #这里的损失函数包含交叉熵损失和l2正则化损失
     train_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, global_step=global_step)
 
+    #在训练神经网络模型时，每过一遍数据既需要通过反向传播来更新神经网络中的参数，又要更新每一个参数的滑动平均值。
+    #为了一次完成多个操作。tf提供来control_dependencies和group
+    #train_op = tf.group(train_step, variable_averages_op)和下面等价的
     with tf.control_dependencies([train_step, variable_averages_op]):
         train_op = tf.no_op(name='train')
     correct_prediction = tf.equal(tf.argmax(average_y, 1), tf.argmax(y_, 1))
+
+    #检验使用来滑动平均模型的神经网络前向传播结果是否正确。
+    #
+    #
     #
     #一组数据上的正确率
     accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
